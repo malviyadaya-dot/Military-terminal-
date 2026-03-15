@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tactical Command Terminal</title>
+    <style>
+        body {
+            background-color: #051405;
+            color: #33ff33;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 20px;
+            overflow: hidden;
+            text-shadow: 0 0 5px #33ff33;
+        }
+
+        #terminal-container {
+            height: 90vh;
+            display: flex;
+            flex-direction: column;
+            border: 2px solid #33ff33;
+            padding: 15px;
+            box-shadow: inset 0 0 15px #33ff33, 0 0 20px #000;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15),
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+        }
+
+        #output {
+            flex-grow: 1;
+            overflow-y: auto;
+            white-space: pre; /* Changed to 'pre' to perfectly preserve ASCII art spaces */
+            margin-bottom: 10px;
+            font-size: 14px; /* Slightly smaller to fit the art better on mobile */
+        }
+
+        .input-line {
+            display: flex;
+            align-items: center;
+        }
+
+        .prompt {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        input {
+            background-color: transparent;
+            border: none;
+            color: #33ff33;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            flex-grow: 1;
+            text-shadow: 0 0 5px #33ff33;
+            outline: none;
+        }
+
+        /* Terminal Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #051405; }
+        ::-webkit-scrollbar-thumb { background: #33ff33; }
+        
+        .alert-text { color: #ff3333; text-shadow: 0 0 5px #ff3333; }
+    </style>
+</head>
+<body>
+
+    <div id="terminal-container">
+        <div id="output"></div>
+        <div class="input-line" id="input-container" style="display: none;">
+            <span class="prompt" id="cli-prompt">ROOT@DEFENSE_NET:~#</span>
+            <input type="text" id="cmd-input" autocomplete="off" spellcheck="false">
+        </div>
+    </div>
+
+    <script>
+        const output = document.getElementById('output');
+        const inputContainer = document.getElementById('input-container');
+        const cmdInput = document.getElementById('cmd-input');
+        const promptSpan = document.getElementById('cli-prompt');
+
+        // The ASCII Art is printed instantly, the rest is delayed
+        const asciiArt = `
+   _____  .__.__  .__  __                           
+  /     \\ |__|  | |__|/  |______ _______ ___.__.    
+ /  \\ /  \\|  |  | |  \\   __\\__  \\\\_  __ <   |  |    
+/    Y    \\  |  |_|  ||  |  / __ \\|  | \\/\\___  |    
+\\____|__  /__|____/__||__| (____  /__|   / ____|    
+        \\/                      \\/       \\/         
+___________                  .__              .__   
+\\__    ___/__________  _____ |__| ____ _____  |  |  
+  |    |_/ __ \\_  __ \\/     \\|  |/    \\\\__  \\ |  |  
+  |    |\\  ___/|  | \\/  Y Y  \\  |   |  \\/ __ \\|  |__
+  |____| \\___  >__|  |__|_|  /__|___|  (____  /____/
+             \\/            \\/        \\/     \\/      
+`;
+
+        const bootSequence = [
+            "INITIALIZING TACTICAL SECURE NETWORK...",
+            "ESTABLISHING SATELLITE UPLINK... [OK]",
+            "DECRYPTING DEFENSE PROTOCOLS... [OK]",
+            "LOADING MODULES... [OK]",
+            "SYSTEM AUTHORIZED: Made by Sanket Malviya",
+            "--------------------------------------------------",
+            "WARNING: UNAUTHORIZED ACCESS IS STRICTLY PROHIBITED.",
+            "Type 'help' to view available commands.",
+            "--------------------------------------------------"
+        ];
+
+        let isBooting = true;
+        let awaitingAuth = false;
+        let currentAuthCode = "";
+        let currentTarget = "";
+        let countdownInterval;
+
+        // Ask for notification permission immediately
+        if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+            Notification.requestPermission();
+        }
+
+        function printLine(text, delay = 0, isAlert = false) {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    const line = document.createElement('div');
+                    line.textContent = text;
+                    if (isAlert) line.className = 'alert-text';
+                    output.appendChild(line);
+                    output.scrollTop = output.scrollHeight;
+                    resolve();
+                }, delay);
+            });
+        }
+
+        async function runBootSequence() {
+            // Print ASCII Art instantly
+            const artDiv = document.createElement('div');
+            artDiv.textContent = asciiArt;
+            output.appendChild(artDiv);
+
+            // Print the rest of the sequence with a cool delay
+            for (let i = 0; i < bootSequence.length; i++) {
+                await printLine(bootSequence[i], Math.random() * 400 + 200);
+            }
+            isBooting = false;
+            inputContainer.style.display = 'flex';
+            cmdInput.focus();
+        }
+
+        function triggerSystemNotification(code) {
+            const title = "Command HQ - Secure Message";
+            const options = {
+                body: `CRITICAL: Strike Authorization Code is [ ${code} ]`,
+                icon: "https://cdn-icons-png.flaticon.com/512/1004/1004733.png",
+                vibrate: [200, 100, 200, 100, 200], // Makes the phone vibrate if supported!
+                requireInteraction: true
+            };
+
+            if (!("Notification" in window)) {
+                printLine("ERROR: SYSTEM NOTIFICATIONS NOT SUPPORTED ON THIS BROWSER.", 0, true);
+                printLine(`[FALLBACK SECURE COMMS] YOUR CODE IS: ${code}`, 0, true);
+            } else if (Notification.permission === "granted") {
+                new Notification(title, options);
+            } else if (Notification.permission !== "denied") {
+                Notification.requestPermission().then(permission => {
+                    if (permission === "granted") {
+                        new Notification(title, options);
+                    } else {
+                        printLine(`[FALLBACK SECURE COMMS] YOUR CODE IS: ${code}`, 0, true);
+                    }
+                });
+            } else {
+                printLine("WARNING: DEVICE NOTIFICATIONS BLOCKED BY YOUR PHONE SETTINGS.", 0, true);
+                printLine(`[FALLBACK SECURE COMMS] YOUR CODE IS: ${code}`, 0, true);
+            }
+        }
+
+        function startAttackCountdown() {
+            let timeLeft = 180; 
+            printLine("PAYLOAD LAUNCHED. TRACKING RADAR TRAJECTORY...", 0, true);
+            printLine("Type 'abort' to self-destruct payload before impact.", 0, true);
+
+            const timerLine = document.createElement('div');
+            timerLine.className = 'alert-text';
+            output.appendChild(timerLine);
+
+            countdownInterval = setInterval(() => {
+                timeLeft--;
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                
+                const formattedSeconds = seconds < 10 ? '0' + seconds : seconds;
+                timerLine.textContent = `TIME TO IMPACT: T-MINUS ${minutes}:${formattedSeconds}`;
+                output.scrollTop = output.scrollHeight;
+
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    printLine("==================================================", 0, true);
+                    printLine(`CONFIRMED: TARGET [${currentTarget}] HAS BEEN NEUTRALIZED.`, 0, true);
+                    printLine("==================================================", 0, true);
+                    promptSpan.textContent = 'ROOT@DEFENSE_NET:~#';
+                }
+            }, 1000); 
+        }
+
+        function processCommand(cmd) {
+            const args = cmd.trim().toLowerCase().split(' ');
+            const command = args[0];
+
+            if (awaitingAuth) {
+                printLine(`AUTH_OVERRIDE> ${cmd}`);
+                if (cmd === currentAuthCode) {
+                    printLine("AUTHORIZATION ACCEPTED. WEAPONS HOT.");
+                    promptSpan.textContent = 'ROOT@DEFENSE_NET:~#';
+                    awaitingAuth = false;
+                    startAttackCountdown();
+                } else if (cmd === 'abort') {
+                    printLine("STRIKE SEQUENCE ABORTED BY USER.", 0, true);
+                    promptSpan.textContent = 'ROOT@DEFENSE_NET:~#';
+                    awaitingAuth = false;
+                } else {
+                    printLine("AUTHORIZATION FAILED. STRIKE ABORTED.", 0, true);
+                    promptSpan.textContent = 'ROOT@DEFENSE_NET:~#';
+                    awaitingAuth = false;
+                }
+                return;
+            }
+
+            printLine(`${promptSpan.textContent} ${cmd}`);
+
+            switch (command) {
+                case 'help':
+                    printLine("AVAILABLE COMMANDS:");
+                    printLine("  help     - Display this menu");
+                    printLine("  status   - Show network and defense status");
+                    printLine("  radar    - Scan local sector for hostiles");
+                    printLine("  attack   - Initiate strike (Requires Target & 2FA)");
+                    printLine("  abort    - Cancel an in-progress strike");
+                    printLine("  clear    - Clear terminal output");
+                    break;
+                case 'status':
+                    printLine("SYSTEM STATUS: NOMINAL");
+                    printLine("DEFCON LEVEL: 3");
+                    printLine("FIREWALL: ACTIVE");
+                    break;
+                case 'radar':
+                    printLine("SCANNING SECTOR 7G...");
+                    setTimeout(() => printLine("NO HOSTILE SIGNATURES DETECTED."), 1500);
+                    break;
+                case 'attack':
+                    if (args.length < 2) {
+                        printLine("ERROR: TARGET REQUIRED. USAGE: attack [target_name]", 0, true);
+                    } else {
+                        currentTarget = args.slice(1).join(' ').toUpperCase();
+                        currentAuthCode = Math.floor(10000 + Math.random() * 90000).toString(); 
+                        
+                        printLine(`TARGET LOCKED: ${currentTarget}`);
+                        printLine("AWAITING COMMANDER CONFIRMATION...");
+                        printLine("CHECKING DEVICE FOR SYSTEM NOTIFICATION...");
+                        
+                        promptSpan.textContent = 'AUTH_OVERRIDE> ';
+                        awaitingAuth = true;
+                        
+                        setTimeout(() => { triggerSystemNotification(currentAuthCode); }, 1000);
+                    }
+                    break;
+                case 'abort':
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                        printLine("==================================================", 0, true);
+                        printLine("PAYLOAD SELF-DESTRUCT INITIATED. TARGET SAVED.", 0, true);
+                        printLine("==================================================", 0, true);
+                    } else {
+                        printLine("NO ACTIVE STRIKE TO ABORT.");
+                    }
+                    break;
+                case 'clear':
+                    output.innerHTML = '';
+                    break;
+                case '':
+                    break;
+                default:
+                    printLine(`COMMAND NOT RECOGNIZED: ${command}`);
+                    printLine("Type 'help' for a list of valid commands.");
+            }
+            output.scrollTop = output.scrollHeight;
+        }
+
+        cmdInput.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                const cmd = this.value;
+                this.value = '';
+                processCommand(cmd);
+            }
+        });
+
+        document.addEventListener('click', () => {
+            if (!isBooting) cmdInput.focus();
+        });
+
+        runBootSequence();
+    </script>
+</body>
+  </html>
